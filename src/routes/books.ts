@@ -83,11 +83,79 @@ export async function booksRouter(app: FastifyInstance) {
     },
   );
 
-  app.put('/:id', () => {
-    // Implement PUT route for updating a book
-  });
+  app.put(
+    '/:id',
+    {
+      preHandler: [app.authenticate],
+    },
+    async (request, reply) => {
+      const updateBookBodySchema = z.object({
+        id: z.string().uuid(),
+        title: z.string(),
+        genrer: z.string(),
+        author: z.string(),
+      });
+  
+      const { id } = updateBookBodySchema.parse(request.params);
+  
+      try {
+        // Valida o corpo da requisição
+        const dataToUpdate = updateBookBodySchema.parse(request.body);
+  
+        // Testa se os campos a serem alterados foram enviados
+        if (Object.keys(dataToUpdate).length === 0) {
+          return reply.status(400).send({ error: 'No fields provided for update' });
+        }
+  
+        // Atualiza o livro no banco de dados
+        const updatedRows = await knex('books')
+          .where({ id })
+          .andWhere({ user_id: request.user.id })
+          .update(dataToUpdate);
 
-  app.delete('/:id', () => {
-    // Implement PUT route for updating a book
-  });
+        // Valida se a atualização foi possível  
+        if (updatedRows === 0) {
+          return reply.status(404).send({ error: 'User not found or not authorized' });
+        }
+        
+        // Retorna OK para alteração bem sucedida
+        return reply.status(200).send({ message: 'User updated successfully' });
+      } catch { // Retorna erro na requisição
+        return reply.status(400).send({ error: 'Invalid request' });
+      }
+    },
+  );
+  
+
+  app.delete(
+    '/:id',
+    {
+      preHandler: [app.authenticate],
+    },
+    async (request, reply) => {
+      const { id: user_id } = request.user;
+
+      const deleteBookParamsSchema = z.object({
+        id: z.string().uuid(),
+      });
+
+      const { id } = deleteBookParamsSchema.parse(request.params);
+
+      // Deleta livro no banco
+      const deletedBook = await knex('books')
+        .where({
+          id,
+          user_id,
+        })
+        .del();
+
+        // Valida se houve falha na deleção
+        if (deletedBook === 0) {
+          return reply.status(404).send({ error: 'User not found or not authorized' });
+        }
+        
+        // Retorna OK para caso de deleção bem sucedida
+        return reply.status(200).send({ message: 'User deleted successfully' });
+    },
+  );
 }
